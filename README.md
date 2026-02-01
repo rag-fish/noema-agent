@@ -26,6 +26,42 @@ In a typical architecture:
 
 Docker-based deployment ensures reproducibility, auditability, and infrastructure neutrality, enabling the same agent runtime to operate consistently across laptops, private servers, and cloud environments.
 
+Architecture (Conceptual)
+-------------------------
+Noema Agent Engine is designed as part of an **Edge–Cloud Hybrid Agentic RAG architecture**, where responsibility is explicitly divided by capability, cost, latency, and privacy constraints.
+
+At a high level, the system is composed of four logical layers:
+
+1. Edge (Client)
+   - Noesis Noema (macOS / iOS)
+   - Local-first interaction and lightweight inference
+   - Local RAGpack access and reasoning trace visualization
+   - Acts as the entry point for user intent and constraints
+
+2. Agent Core (Server)
+   - Noema Agent Engine (this project)
+   - Executes Agentic RAG loops (reason → retrieve → evaluate → refine)
+   - Orchestrates retrieval, re-ranking, and evidence grounding
+   - Enforces compute, cost, and privacy boundaries
+
+3. Routing & Policy Layer
+   - Determines whether execution occurs on:
+     - Local models
+     - On-prem / VPC-hosted models
+     - External cloud LLM APIs
+   - Decisions are based on:
+     - Hardware profile
+     - Network conditions
+     - Privacy and cost policies
+   - Supports graceful degradation when constraints cannot be satisfied
+
+4. Knowledge Layer
+   - RAGpack as a portable, versioned knowledge unit
+   - Shared across edge and server environments
+   - Supports text-first and multimodal extensions (image, video, audio metadata)
+
+This separation allows the system to scale in capability without assuming unlimited compute, always-on connectivity, or unrestricted data sharing.
+
 Prerequisites
 -------------
 - Docker Desktop (macOS/Windows/Linux)
