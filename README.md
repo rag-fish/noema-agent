@@ -60,7 +60,40 @@ At a high level, the system is composed of four logical layers:
    - Shared across edge and server environments
    - Supports text-first and multimodal extensions (image, video, audio metadata)
 
+
 This separation allows the system to scale in capability without assuming unlimited compute, always-on connectivity, or unrestricted data sharing.
+
+Design Principles
+-----------------
+Noema Agent Engine is guided by a small set of design principles that reflect the realities of 2026-era AI systems, not idealized infinite-compute environments.
+
+1. Privacy-first by default
+   - User and organizational data should never be forced to leave the environments they control.
+   - External LLM APIs are always optional and explicitly governed by policy, not assumed.
+
+2. OSS-first and self-hostable
+   - Core functionality must remain usable with only open-source components and self-hosted infrastructure.
+   - Commercial integrations (cloud LLMs, monitoring, etc.) are add-ons, not hard dependencies.
+
+3. Deterministic, reproducible deployment
+   - The same Docker-based setup should behave consistently across laptops, private servers, and cloud instances.
+   - Configuration is declarative and versioned, enabling auditability and long-term maintainability.
+
+4. Cost-aware reasoning and routing
+   - Agentic RAG loops and test-time compute are treated as scarce resources, not infinite.
+   - The router explicitly trades off latency, cost, and expected answer quality based on policy and context.
+
+5. Evidence-driven Agentic RAG
+   - Every answer should be traceable back to the retrieved evidence and the reasoning steps taken.
+   - Reasoning traces and retrieval logs are first-class artifacts, not debugging afterthoughts.
+
+6. Edge–Cloud independence
+   - The system should not assume always-on connectivity or a specific hyperscaler.
+   - Edge-only, on-prem-only, and hybrid deployments are all valid first-class configurations.
+
+7. Composable, minimally coupled components
+   - Retrieval, routing, reasoning, and evaluation are separated so they can evolve independently.
+   - Noema Agent Engine is intended to be embedded into larger systems, not to be a monolith.
 
 Prerequisites
 -------------
