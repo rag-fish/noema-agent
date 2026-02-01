@@ -1,13 +1,30 @@
-LLM Document Agent (Docker Edition)
-===================================
+Noema Agent Engine (formerly LLM Document Agent)
+===============================================
 
 Overview
 --------
-A local, containerized LLM document Q&A agent powered by Ollama and Streamlit.
-This production-ready Docker deployment delivers highly accurate, context-rich answers from your documents with lightning-fast, privacy-first local inference.
-The enhanced prompt engineering and RAG architecture provide detailed, human-like explanations for any supported content.
+Noema Agent Engine is the server-side agent and RAG execution engine of the Noesis Noema ecosystem.
 
-Docker support enables reproducible, zero-config deployment on any environment.
+It is designed as a privacy-first, OSS-first, Dockerized agent runtime that operates across on-premise, VPC, and cloud environments, acting as the *reasoning and orchestration core* behind Noesis Noema clients.
+
+Rather than being a simple document Q&A service, Noema Agent Engine focuses on **Agentic RAG**:
+- Iterative reasoning and retrieval loops
+- Evidence-driven answer generation
+- Explicit control over compute, cost, and privacy boundaries
+
+This project is intentionally **not a SaaS**.
+It is built for teams and enterprises that require:
+- Full data ownership
+- Deterministic deployment
+- Transparent system behavior
+- Long-term maintainability over rapid experimentation
+
+In a typical architecture:
+- **Noesis Noema (Client)** handles local interaction, lightweight inference, and user-facing reasoning traces
+- **Noema Agent Engine (Server)** performs heavy retrieval, orchestration, evaluation, and multi-model routing
+- **RAGpack** serves as the shared, portable knowledge unit between edge and server
+
+Docker-based deployment ensures reproducibility, auditability, and infrastructure neutrality, enabling the same agent runtime to operate consistently across laptops, private servers, and cloud environments.
 
 Prerequisites
 -------------
