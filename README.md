@@ -16,10 +16,10 @@ we define the system as diagrams and specifications before we write any executab
 
 ---
 
-## Phase 2A: Critical Compliance
+## Phase 2A: Critical Compliance + X-4 Evidence Attachment
 
 **Status**: Implemented  
-**Version**: 2.0.0
+**Version**: 2.1.0
 
 This is the Execution Layer implementation — stateless, deterministic, no routing.
 
@@ -35,6 +35,7 @@ This is the Execution Layer implementation — stateless, deterministic, no rout
 - ✅ Structured logging with trace_id propagation
 - ✅ Timing instrumentation
 - ✅ Strict schema validation (extra fields rejected)
+- ✅ Evidence attachment for source references (X-4)
 
 ### Quick Start
 
@@ -99,7 +100,31 @@ Response (Success):
   "result": {},
   "error": null,
   "timestamp": "ISO-8601",
-  "execution_time_ms": 50
+  "execution_time_ms": 50,
+  "evidence": []
+}
+```
+
+Response (Success with Evidence - X-4):
+```json
+{
+  "session_id": "uuid",
+  "request_id": "uuid",
+  "trace_id": "uuid",
+  "status": "success",
+  "result": {},
+  "error": null,
+  "timestamp": "ISO-8601",
+  "execution_time_ms": 50,
+  "evidence": [
+    {
+      "source_id": "doc-001#p3",
+      "source_type": "pdf",
+      "location": "p.3",
+      "snippet": "Human-readable excerpt from source",
+      "score": 0.95
+    }
+  ]
 }
 ```
 
@@ -117,6 +142,10 @@ Response (Error):
     "recoverable": false,
     "trace_id": "uuid",
     "timestamp": "ISO-8601"
+  },
+  "timestamp": "ISO-8601",
+  "execution_time_ms": 25,
+  "evidence": []
   },
   "timestamp": "ISO-8601",
   "execution_time_ms": 25

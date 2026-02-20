@@ -13,7 +13,8 @@ from app.models import (
     InvocationResponse,
     ErrorDetail,
     ErrorCode,
-    ExecutionStatus
+    ExecutionStatus,
+    EvidenceAttachment
 )
 from app.logging_utils import (
     log_invocation_started,
@@ -61,6 +62,18 @@ def execute_task(request: InvocationRequest) -> InvocationResponse:
     if task_type == "echo":
         execution_time_ms = int((time.perf_counter() - start_time) * 1000)
 
+        # Parse evidence from payload if present
+        evidence_list: list[EvidenceAttachment] = []
+        if "evidence" in payload and isinstance(payload["evidence"], list):
+            for evidence_dict in payload["evidence"]:
+                if isinstance(evidence_dict, dict):
+                    try:
+                        evidence_item = EvidenceAttachment(**evidence_dict)
+                        evidence_list.append(evidence_item)
+                    except Exception:
+                        # Skip invalid evidence items silently
+                        pass
+
         # Log completion
         log_invocation_completed(
             trace_id=trace_id,
@@ -79,7 +92,8 @@ def execute_task(request: InvocationRequest) -> InvocationResponse:
             result=payload,
             error=None,
             timestamp=_get_timestamp(),
-            execution_time_ms=execution_time_ms
+            execution_time_ms=execution_time_ms,
+            evidence=evidence_list
         )
 
     # Unsupported task type
@@ -123,5 +137,6 @@ def execute_task(request: InvocationRequest) -> InvocationResponse:
         result={},
         error=error_detail,
         timestamp=error_timestamp,
-        execution_time_ms=execution_time_ms
+        execution_time_ms=execution_time_ms,
+        evidence=[]
     )

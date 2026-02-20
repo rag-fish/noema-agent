@@ -33,6 +33,28 @@ class ErrorCode(str, Enum):
     E_EXEC_005 = "E-EXEC-005"  # PayloadTooLarge
 
 
+class EvidenceAttachment(BaseModel):
+    """
+    Evidence attachment for response source reference.
+
+    Provides human-readable source information for result traceability.
+
+    Attributes:
+        source_id: Unique source identifier (e.g., "doc-001#p3")
+        source_type: Source type (e.g., "pdf", "web", "note")
+        location: Page number or section info (e.g., "p.3", "§2.1")
+        snippet: Human-readable excerpt from source
+        score: Optional relevance score (0.0-1.0)
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str = Field(..., description="Unique source identifier")
+    source_type: str = Field(..., description="Source type (pdf, web, note, etc.)")
+    location: str = Field(..., description="Page or section location")
+    snippet: str = Field(..., description="Human-readable text excerpt")
+    score: Optional[float] = Field(None, description="Optional relevance score (0.0-1.0)")
+
+
 class ErrorDetail(BaseModel):
     """
     Structured error information.
@@ -90,6 +112,7 @@ class InvocationResponse(BaseModel):
         error: Structured error detail if failed
         timestamp: Response generation time (ISO-8601)
         execution_time_ms: Execution duration in milliseconds
+        evidence: Evidence attachments for result (source references)
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -101,3 +124,4 @@ class InvocationResponse(BaseModel):
     error: Optional[ErrorDetail] = Field(None, description="Error detail if failed")
     timestamp: str = Field(..., description="Response generation time (ISO-8601)")
     execution_time_ms: int = Field(..., description="Execution duration in milliseconds")
+    evidence: list[EvidenceAttachment] = Field(default_factory=list, description="Evidence attachments for the result")
