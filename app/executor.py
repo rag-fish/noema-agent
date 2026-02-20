@@ -6,6 +6,7 @@ Each task type is handled deterministically.
 """
 
 import time
+import uuid
 from datetime import datetime, timezone
 
 from app.models import (
@@ -43,10 +44,11 @@ def execute_task(request: InvocationRequest) -> InvocationResponse:
         InvocationResponse with status, result, and optional error
     """
     start_time = time.perf_counter()
+    trace_id = str(uuid.uuid4())
 
     # Log invocation started
     log_invocation_started(
-        trace_id=request.trace_id,
+        trace_id=trace_id,
         request_id=request.request_id,
         session_id=request.session_id,
         task_type=request.task_type
@@ -55,7 +57,6 @@ def execute_task(request: InvocationRequest) -> InvocationResponse:
     task_type = request.task_type
     session_id = request.session_id
     request_id = request.request_id
-    trace_id = request.trace_id
     payload = request.payload
 
     # Execute task

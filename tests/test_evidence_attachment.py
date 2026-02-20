@@ -2,8 +2,10 @@
 Unit tests for X-4 Evidence Attachment.
 
 Tests EvidenceAttachment model and evidence integration in responses.
+Updated for X-5: trace_id removed from InvocationRequest.
 """
 
+import re
 import pytest
 from app.models import (
     InvocationRequest,
@@ -12,6 +14,15 @@ from app.models import (
     ExecutionStatus
 )
 from app.executor import execute_task
+
+UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE
+)
+
+
+def _is_valid_uuid(value: str) -> bool:
+    return bool(UUID_PATTERN.match(value))
 
 
 def test_evidence_attachment_valid():
@@ -73,11 +84,11 @@ def test_invocation_response_can_hold_evidence():
     response = InvocationResponse(
         session_id="session-123",
         request_id="request-456",
-        trace_id="trace-789",
+        trace_id="a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         status=ExecutionStatus.SUCCESS,
         result={"answer": "test"},
         error=None,
-        timestamp="2026-02-20T10:00:00Z",
+        timestamp="2026-02-21T10:00:00Z",
         execution_time_ms=50,
         evidence=[evidence1, evidence2]
     )
@@ -92,11 +103,11 @@ def test_invocation_response_empty_evidence_by_default():
     response = InvocationResponse(
         session_id="session-123",
         request_id="request-456",
-        trace_id="trace-789",
+        trace_id="a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         status=ExecutionStatus.SUCCESS,
         result={},
         error=None,
-        timestamp="2026-02-20T10:00:00Z",
+        timestamp="2026-02-21T10:00:00Z",
         execution_time_ms=50
     )
 
@@ -144,13 +155,12 @@ def test_echo_task_passes_through_evidence():
                 }
             ]
         },
-        timestamp="2026-02-20T10:00:00Z",
-        trace_id="trace-789"
     )
 
     response = execute_task(request)
 
     assert response.status == ExecutionStatus.SUCCESS
+    assert _is_valid_uuid(response.trace_id)
     assert len(response.evidence) == 2
     assert response.evidence[0].source_id == "doc-001#p3"
     assert response.evidence[0].snippet == "This is the evidence text"
@@ -167,8 +177,6 @@ def test_echo_task_without_evidence():
         request_id="request-456",
         task_type="echo",
         payload={"message": "test without evidence"},
-        timestamp="2026-02-20T10:00:00Z",
-        trace_id="trace-789"
     )
 
     response = execute_task(request)
@@ -203,8 +211,6 @@ def test_echo_task_ignores_invalid_evidence():
                 }
             ]
         },
-        timestamp="2026-02-20T10:00:00Z",
-        trace_id="trace-789"
     )
 
     response = execute_task(request)
@@ -223,12 +229,12 @@ def test_error_response_has_empty_evidence():
         request_id="request-456",
         task_type="unsupported_task",
         payload={},
-        timestamp="2026-02-20T10:00:00Z",
-        trace_id="trace-789"
     )
 
     response = execute_task(request)
 
     assert response.status == ExecutionStatus.ERROR
     assert response.evidence == []
+    assert _is_valid_uuid(response.trace_id)
+    assert response.error.trace_id == response.trace_id
 

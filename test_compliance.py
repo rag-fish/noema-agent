@@ -1,21 +1,35 @@
 #!/usr/bin/env python3
 """
-Phase 2A Compliance Tests for noema-agent
+Compliance Tests for noema-agent (Phase 2A + X-4 + X-5)
 
-Tests trace_id propagation, structured errors, execution_time_ms, and strict schema enforcement.
+X-5: trace_id is now Execution Layer-generated.
+     Sending trace_id in request must return 422.
 """
 
+import re
 import requests
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 BASE_URL = "http://127.0.0.1:8000"
 
+UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE
+)
 
-def test_trace_id_propagation():
-    """Test that trace_id is echoed in response"""
-    trace_id = str(uuid.uuid4())
+
+def _is_valid_uuid(value: str) -> bool:
+    return bool(UUID_PATTERN.match(str(value)))
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def test_trace_id_generated_by_server():
+    """X-5: trace_id must be server-generated; response contains valid UUID trace_id"""
     request_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
 
@@ -24,27 +38,64 @@ def test_trace_id_propagation():
         "request_id": request_id,
         "task_type": "echo",
         "payload": {"message": "test"},
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "trace_id": trace_id
     }
 
     response = requests.post(f"{BASE_URL}/invoke", json=payload)
-    print(f"✓ Trace ID propagation test: {response.status_code}")
-    print(f"  Request trace_id: {trace_id}")
+    print(f"✓ Server-generated trace_id test: {response.status_code}")
 
     result = response.json()
     print(f"  Response trace_id: {result.get('trace_id')}")
     print(f"  Response: {json.dumps(result, indent=2)}\n")
 
     return (response.status_code == 200 and
-            result.get("trace_id") == trace_id and
+            "trace_id" in result and
+            isinstance(result["trace_id"], str) and
+            _is_valid_uuid(result["trace_id"]) and
             result.get("request_id") == request_id and
             result.get("session_id") == session_id)
 
 
+def test_client_supplied_trace_id_rejected():
+    """X-5: Supplying trace_id in request must be rejected with 422"""
+    payload = {
+        "session_id": str(uuid.uuid4()),
+        "request_id": str(uuid.uuid4()),
+        "task_type": "echo",
+        "payload": {},
+        "trace_id": str(uuid.uuid4()),  # must be rejected
+    }
+
+    response = requests.post(f"{BASE_URL}/invoke", json=payload)
+    print(f"✓ Client trace_id rejected test: {response.status_code}")
+    print(f"  Response: {json.dumps(response.json(), indent=2)}\n")
+
+    return response.status_code == 422
+
+
+def test_trace_id_unique_per_invocation():
+    """X-5: Each invocation must produce a unique trace_id"""
+    payload = {
+        "session_id": str(uuid.uuid4()),
+        "request_id": str(uuid.uuid4()),
+        "task_type": "echo",
+        "payload": {},
+    }
+
+    r1 = requests.post(f"{BASE_URL}/invoke", json=payload)
+    r2 = requests.post(f"{BASE_URL}/invoke", json=payload)
+    trace1 = r1.json().get("trace_id")
+    trace2 = r2.json().get("trace_id")
+    print(f"✓ Unique trace_id per invocation: {trace1} != {trace2}\n")
+
+    return (r1.status_code == 200 and
+            r2.status_code == 200 and
+            trace1 != trace2 and
+            _is_valid_uuid(trace1) and
+            _is_valid_uuid(trace2))
+
+
 def test_structured_error_shape():
     """Test that errors have structured format with code, message, recoverable, trace_id"""
-    trace_id = str(uuid.uuid4())
     request_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
 
@@ -53,8 +104,6 @@ def test_structured_error_shape():
         "request_id": request_id,
         "task_type": "unsupported_task",
         "payload": {},
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "trace_id": trace_id
     }
 
     response = requests.post(f"{BASE_URL}/invoke", json=payload)
@@ -72,12 +121,13 @@ def test_structured_error_shape():
             "recoverable" in error and
             "trace_id" in error and
             "timestamp" in error and
-            error["code"] == "E-EXEC-001")
+            error["code"] == "E-EXEC-001" and
+            error["trace_id"] == result.get("trace_id") and
+            _is_valid_uuid(result.get("trace_id", "")))
 
 
 def test_execution_time_ms_presence():
     """Test that execution_time_ms is present in all responses"""
-    trace_id = str(uuid.uuid4())
     request_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
 
@@ -86,8 +136,6 @@ def test_execution_time_ms_presence():
         "request_id": request_id,
         "task_type": "echo",
         "payload": {"data": "test"},
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "trace_id": trace_id
     }
 
     response = requests.post(f"{BASE_URL}/invoke", json=payload)
@@ -105,50 +153,39 @@ def test_execution_time_ms_presence():
 
 def test_strict_schema_enforcement():
     """Test that extra fields are rejected (Pydantic extra='forbid')"""
-    trace_id = str(uuid.uuid4())
-    request_id = str(uuid.uuid4())
-    session_id = str(uuid.uuid4())
-
     payload = {
-        "session_id": session_id,
-        "request_id": request_id,
+        "session_id": str(uuid.uuid4()),
+        "request_id": str(uuid.uuid4()),
         "task_type": "echo",
         "payload": {},
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "trace_id": trace_id,
-        "extra_field": "should_be_rejected"  # This should be rejected
+        "extra_field": "should_be_rejected"
     }
 
     response = requests.post(f"{BASE_URL}/invoke", json=payload)
     print(f"✓ Strict schema enforcement test: {response.status_code}")
     print(f"  Response: {json.dumps(response.json(), indent=2)}\n")
 
-    # Should return 422 Unprocessable Entity due to extra field
     return response.status_code == 422
 
 
 def test_missing_required_field():
     """Test that missing required fields are rejected"""
     payload = {
-        "session_id": str(uuid.uuid4()),
+        # Missing session_id — must fail
         "request_id": str(uuid.uuid4()),
         "task_type": "echo",
         "payload": {},
-        "timestamp": datetime.utcnow().isoformat() + "Z"
-        # Missing trace_id - should fail
     }
 
     response = requests.post(f"{BASE_URL}/invoke", json=payload)
     print(f"✓ Missing required field test: {response.status_code}")
     print(f"  Response: {json.dumps(response.json(), indent=2)}\n")
 
-    # Should return 422 Unprocessable Entity due to missing field
     return response.status_code == 422
 
 
 def test_timestamp_in_response():
     """Test that timestamp is present in response"""
-    trace_id = str(uuid.uuid4())
     request_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
 
@@ -157,8 +194,6 @@ def test_timestamp_in_response():
         "request_id": request_id,
         "task_type": "echo",
         "payload": {},
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "trace_id": trace_id
     }
 
     response = requests.post(f"{BASE_URL}/invoke", json=payload)
@@ -175,18 +210,14 @@ def test_timestamp_in_response():
 
 def test_privacy_level_optional():
     """Test that privacy_level is optional"""
-    trace_id = str(uuid.uuid4())
     request_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
 
-    # Without privacy_level
     payload = {
         "session_id": session_id,
         "request_id": request_id,
         "task_type": "echo",
         "payload": {},
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "trace_id": trace_id
     }
 
     response = requests.post(f"{BASE_URL}/invoke", json=payload)
@@ -198,7 +229,6 @@ def test_privacy_level_optional():
 
 def test_evidence_attachment_in_response():
     """Test that evidence attachments are included in response (X-4)"""
-    trace_id = str(uuid.uuid4())
     request_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
 
@@ -218,8 +248,6 @@ def test_evidence_attachment_in_response():
                 }
             ]
         },
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "trace_id": trace_id
     }
 
     response = requests.post(f"{BASE_URL}/invoke", json=payload)
@@ -238,7 +266,6 @@ def test_evidence_attachment_in_response():
 
 def test_evidence_source_reference_fields():
     """Test that evidence contains all required source reference fields (X-4 DoD)"""
-    trace_id = str(uuid.uuid4())
     request_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
 
@@ -257,8 +284,6 @@ def test_evidence_source_reference_fields():
                 }
             ]
         },
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "trace_id": trace_id
     }
 
     response = requests.post(f"{BASE_URL}/invoke", json=payload)
@@ -275,7 +300,6 @@ def test_evidence_source_reference_fields():
         print(f"  snippet: {ev.get('snippet')[:50]}...")
         print(f"  Response: {json.dumps(result, indent=2)}\n")
 
-    # DoD: Response includes source reference
     return (response.status_code == 200 and
             len(evidence) > 0 and
             "source_id" in evidence[0] and
@@ -287,7 +311,6 @@ def test_evidence_source_reference_fields():
 
 def test_evidence_human_readable_format():
     """Test that evidence format is human-readable (X-4 DoD)"""
-    trace_id = str(uuid.uuid4())
     request_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
 
@@ -307,8 +330,6 @@ def test_evidence_human_readable_format():
                 }
             ]
         },
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "trace_id": trace_id
     }
 
     response = requests.post(f"{BASE_URL}/invoke", json=payload)
@@ -323,7 +344,6 @@ def test_evidence_human_readable_format():
         print(f"  Snippet length: {len(snippet)}")
         print(f"  Response: {json.dumps(result, indent=2)}\n")
 
-    # DoD: Evidence format human-readable
     return (response.status_code == 200 and
             len(evidence) > 0 and
             len(evidence[0].get("snippet", "")) > 0 and
@@ -332,7 +352,6 @@ def test_evidence_human_readable_format():
 
 def test_echo_without_evidence_still_works():
     """Test that echo task still works without evidence (backward compatibility)"""
-    trace_id = str(uuid.uuid4())
     request_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
 
@@ -341,8 +360,6 @@ def test_echo_without_evidence_still_works():
         "request_id": request_id,
         "task_type": "echo",
         "payload": {"message": "test without evidence"},
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "trace_id": trace_id
     }
 
     response = requests.post(f"{BASE_URL}/invoke", json=payload)
@@ -359,12 +376,14 @@ def test_echo_without_evidence_still_works():
 
 if __name__ == "__main__":
     print("=" * 70)
-    print("Phase 2A Compliance Tests for noema-agent")
+    print("Compliance Tests for noema-agent (Phase 2A + X-4 + X-5)")
     print("=" * 70 + "\n")
 
     try:
         tests = [
-            ("Trace ID propagation", test_trace_id_propagation),
+            ("Server-generated trace_id (X-5)", test_trace_id_generated_by_server),
+            ("Client trace_id rejected (X-5)", test_client_supplied_trace_id_rejected),
+            ("Unique trace_id per invocation (X-5)", test_trace_id_unique_per_invocation),
             ("Structured error shape", test_structured_error_shape),
             ("Execution time presence", test_execution_time_ms_presence),
             ("Strict schema enforcement", test_strict_schema_enforcement),
