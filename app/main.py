@@ -14,7 +14,7 @@ from app.executor import execute_task
 app = FastAPI(
     title="noema-agent v2",
     description="Stateless execution layer for Noesis Noema architecture",
-    version="2.0.0"
+    version="3.0.0"
 )
 
 
@@ -23,7 +23,7 @@ async def root():
     """Health check endpoint."""
     return {
         "service": "noema-agent",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "status": "ready",
         "description": "Stateless execution layer"
     }
