@@ -114,3 +114,39 @@ def log_error_raised(
     }
     logger.error(json.dumps(event))
 
+
+def log_constraint_rejected(
+    trace_id: str,
+    request_id: str,
+    session_id: str,
+    task_type: str,
+    error_code: str,
+    constraint_name: str,
+) -> None:
+    """
+    Log constraint_rejected event (EPIC2).
+
+    Emitted when the ConstraintEngine rejects a request before task dispatch.
+    Raw payload content is intentionally excluded per observability-standard.md §6.1.
+
+    Args:
+        trace_id: Distributed tracing identifier (Execution Layer-generated)
+        request_id: Unique request identifier echoed from request
+        session_id: Session identifier echoed from request
+        task_type: Task type from the rejected request
+        error_code: E-EXEC-* code identifying the violated constraint
+        constraint_name: Name of the specific check that failed
+                         (e.g., "check_payload_size", "check_privacy_coherence")
+    """
+    event = {
+        "event_name": "constraint_rejected",
+        "timestamp": _get_timestamp(),
+        "trace_id": trace_id,
+        "request_id": request_id,
+        "session_id": session_id,
+        "task_type": task_type,
+        "error_code": error_code,
+        "constraint_name": constraint_name,
+    }
+    logger.warning(json.dumps(event))
+
