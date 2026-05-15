@@ -1,0 +1,46 @@
+# noema-agent docker-compose
+#
+# Services:
+#   agent      — production image (default)
+#   agent-dev  — dev image with hot-reload and test deps mounted
+#
+# Usage:
+#   Start prod:    docker compose up agent
+#   Start dev:     docker compose up agent-dev
+#   Run tests:     docker compose run --rm agent-dev pytest tests/ -v
+#   Health check:  curl http://localhost:8000/health
+
+services:
+  agent:
+    build:
+      context: .
+      target: prod
+    image: noema-agent:prod
+    container_name: noema-agent
+    ports:
+      - "8000:8000"
+    environment:
+      - MAX_PAYLOAD_BYTES=65536
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  agent-dev:
+    build:
+      context: .
+      target: dev
+    image: noema-agent:dev
+    container_name: noema-agent-dev
+    ports:
+      - "8001:8000"
+    environment:
+      - MAX_PAYLOAD_BYTES=65536
+    volumes:
+      # Hot-reload: mount source so changes reflect without rebuild
+      - ./app:/app/app
+      - ./tests:/app/tests
+    restart: "no"
