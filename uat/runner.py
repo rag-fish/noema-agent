@@ -41,23 +41,22 @@ def _c(colour: str, text: str) -> str:
 # Claude judge
 # ---------------------------------------------------------------------------
 
-JUDGE_SYSTEM = """
-You are a UAT judge for noema-agent, a constrained execution API.
-You receive a test scenario description, the HTTP request sent, and the HTTP response received.
-Your job: decide whether the response matches the scenario's expectation.
-
-Respond ONLY with a JSON object. No markdown, no preamble.
-Schema:
-  { "pass": true | false, "reason": "one concise sentence" }
-
-Judgement guidelines:
-- Focus on whether the response behaviour matches the stated expectation.
-- For error scenarios: check status, error code, and that no unintended data leaked.
-- For success scenarios: check status=success and result content.
-- If the response is structurally malformed (not valid JSON), always fail.
-- Be strict about error codes (E-EXEC-001, E-EXEC-004, E-EXEC-005, etc.).
-- Do NOT penalise for fields not mentioned in the expectation.
-"""
+JUDGE_SYSTEM = (
+    "You are a UAT judge for noema-agent, a constrained execution API.\n"
+    "You receive a test scenario description, the HTTP request sent, and the HTTP response received.\n"
+    "Your job: decide whether the response matches the scenario's expectation.\n"
+    "\n"
+    "Respond ONLY with a JSON object. No markdown, no preamble.\n"
+    'Schema: { \"pass\": true | false, \"reason\": \"one concise sentence\" }\n'
+    "\n"
+    "Judgement guidelines:\n"
+    "- Focus on whether the response behaviour matches the stated expectation.\n"
+    "- For error scenarios: check status, error code, and that no unintended data leaked.\n"
+    "- For success scenarios: check status=success and result content.\n"
+    "- If the response is structurally malformed (not valid JSON), always fail.\n"
+    "- Be strict about error codes (E-EXEC-001, E-EXEC-004, E-EXEC-005, etc.).\n"
+    "- Do NOT penalise for fields not mentioned in the expectation."
+)
 
 
 def judge_with_claude(
@@ -75,19 +74,19 @@ def judge_with_claude(
     if not api_key:
         return {"pass": False, "reason": "ANTHROPIC_API_KEY not set"}
 
-    user_message = f"""Scenario: {scenario_name}
+    # Truncate request body for judge (avoid sending huge payloads to Claude)
+    request_summary = json.dumps(request_body, ensure_ascii=False)
+    if len(request_summary) > 2000:
+        request_summary = request_summary[:2000] + "... [truncated]"
 
-Expectation:
-{expectation}
-
-HTTP request body sent to /invoke:
-{json.dumps(request_body, indent=2, ensure_ascii=False)}
-
-HTTP response status: {response_status}
-HTTP response body:
-{json.dumps(response_body, indent=2, ensure_ascii=False)}
-
-Does this response satisfy the expectation?"""
+    user_message = (
+        f"Scenario: {scenario_name}\n\n"
+        f"Expectation:\n{expectation}\n\n"
+        f"HTTP request body sent to /invoke:\n{request_summary}\n\n"
+        f"HTTP response status: {response_status}\n"
+        f"HTTP response body:\n{json.dumps(response_body, indent=2, ensure_ascii=False)}\n\n"
+        "Does this response satisfy the expectation?"
+    )
 
     try:
         resp = requests.post(
@@ -98,7 +97,7 @@ Does this response satisfy the expectation?"""
                 "content-type": "application/json",
             },
             json={
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",  # current model string
                 "max_tokens": 256,
                 "system": JUDGE_SYSTEM,
                 "messages": [{"role": "user", "content": user_message}],
@@ -107,7 +106,17 @@ Does this response satisfy the expectation?"""
         )
         resp.raise_for_status()
         text = resp.json()["content"][0]["text"].strip()
+        # Strip markdown fences if model wraps response
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
         return json.loads(text)
+    except requests.HTTPError as exc:
+        body = ""
+        try:
+            body = exc.response.json().get("error", {}).get("message", "")
+        except Exception:  # noqa: BLE001
+            pass
+        return {"pass": False, "reason": f"Claude API error {exc.response.status_code}: {body or exc}"}
     except Exception as exc:  # noqa: BLE001
         return {"pass": False, "reason": f"Judge error: {exc}"}
 
@@ -154,11 +163,19 @@ def run_scenario(scenario: dict, base_url: str) -> bool:
         print(f"  {_c(CYAN, description)}")
 
     # Build request body
+    # payload_override allows scenarios to specify a generated payload
+    raw_payload = req_spec.get("payload", {})
+    payload_size = req_spec.get("payload_size_bytes", None)
+    if payload_size:
+        # Generate a payload of exactly the requested byte size
+        filler = "X" * payload_size
+        raw_payload = {"data": filler}
+
     request_body: dict[str, Any] = {
         "session_id": f"uat-{uuid.uuid4()}",
         "request_id": str(uuid.uuid4()),
         "task_type":  req_spec.get("task_type", "echo"),
-        "payload":    req_spec.get("payload", {}),
+        "payload":    raw_payload,
     }
     if "privacy_level" in req_spec:
         request_body["privacy_level"] = req_spec["privacy_level"]
@@ -192,9 +209,9 @@ def run_scenario(scenario: dict, base_url: str) -> bool:
     reason = judgment.get("reason", "(no reason)")
 
     if passed:
-        print(f"  {_c(GREEN, 'PASS')} — {reason}")
+        print(f"  {_c(GREEN, 'PASS')} \u2014 {reason}")
     else:
-        print(f"  {_c(RED, 'FAIL')} — {reason}")
+        print(f"  {_c(RED, 'FAIL')} \u2014 {reason}")
         print(f"  response status : {response_status}")
         print(f"  response excerpt: {json.dumps(response_body)[:300]}")
 
