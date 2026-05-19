@@ -1,0 +1,3 @@
+# UAT runner dependencies (local machine, not inside Docker)
+requests>=2.31.0
+pyyaml>=6.0
