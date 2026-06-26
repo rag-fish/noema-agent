@@ -150,3 +150,31 @@ def log_constraint_rejected(
     }
     logger.warning(json.dumps(event))
 
+
+def log_route_planned(
+    trace_id: str,
+    request_id: str,
+    selected_route: str,
+    requires_approval: bool,
+    status: str,
+    session_id: str | None = None,
+) -> None:
+    """
+    Log Route Contract v0 planning event.
+
+    Raw route input, context, metadata, available models, and available tools
+    are intentionally excluded to avoid logging sensitive caller payloads.
+    """
+    event = {
+        "event_name": "route_planned",
+        "timestamp": _get_timestamp(),
+        "trace_id": trace_id,
+        "request_id": request_id,
+        "selected_route": selected_route,
+        "requires_approval": requires_approval,
+        "status": status,
+    }
+    if session_id is not None:
+        event["session_id"] = session_id
+
+    logger.info(json.dumps(event))
