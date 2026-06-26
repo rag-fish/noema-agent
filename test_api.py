@@ -56,6 +56,65 @@ def test_echo_task():
     assert body["execution_time_ms"] >= 0
 
 
+def test_route_contract_minimal_request():
+    """/v1/route accepts minimal valid request and returns planned stub metadata."""
+    payload = {
+        "intent": "answer_question",
+        "input": "What is Noema?",
+    }
+    response = client.post("/v1/route", json=payload)
+    assert response.status_code == 200
+
+    body = response.json()
+    assert body["route"] == "local_echo"
+    assert body["status"] == "planned"
+    assert body["confidence"] == 0.5
+    assert body["requires_approval"] is False
+    assert body["approval_reason"] is None
+    assert "Route Contract v0 stub" in body["reason"]
+    assert "no route was executed" in body["reason"]
+    assert isinstance(body["requires_approval"], bool)
+    assert uuid.UUID(body["trace_id"])
+    assert uuid.UUID(body["request_id"])
+    assert uuid.UUID(body["audit_id"])
+
+
+def test_route_contract_preserves_request_id_and_accepts_object_input():
+    """/v1/route accepts object input and echoes caller request_id."""
+    request_id = str(uuid.uuid4())
+    payload = {
+        "intent": "summarize",
+        "input": {"text": "Short input"},
+        "session_id": "session-route-123",
+        "request_id": request_id,
+        "available_models": ["local-test-model"],
+        "available_tools": ["search"],
+        "context": {"privacy_level": "local"},
+        "metadata": {"caller": "test"},
+    }
+    response = client.post("/v1/route", json=payload)
+    assert response.status_code == 200
+
+    body = response.json()
+    required_fields = {
+        "route",
+        "reason",
+        "confidence",
+        "requires_approval",
+        "approval_reason",
+        "audit_id",
+        "trace_id",
+        "request_id",
+        "status",
+    }
+    assert required_fields.issubset(body.keys())
+    assert body["request_id"] == request_id
+    assert body["status"] == "planned"
+    assert isinstance(body["requires_approval"], bool)
+    assert uuid.UUID(body["trace_id"])
+    assert uuid.UUID(body["audit_id"])
+
+
 def test_unsupported_task():
     """Unsupported task_type returns structured E-EXEC-001 error."""
     request_id = str(uuid.uuid4())

@@ -74,6 +74,7 @@ This is the Execution Layer implementation — stateless, deterministic, no rout
 - `GET /` — Service information
 - `GET /health` — Health check with supported tasks
 - `POST /invoke` — Invocation Boundary (main execution endpoint)
+- `POST /v1/route` — Route Contract v0 planning stub
 
 **POST /invoke**
 
@@ -154,6 +155,53 @@ Response (Error):
 
 **Supported Task Types**:
 - `echo` — Returns payload unchanged
+
+**POST /v1/route**
+
+Route Contract v0 is a typed, non-autonomous planning stub. It returns a route
+decision and governance metadata for future orchestration, but it does not
+execute the selected route, call external LLM APIs, call tools, persist
+decisions, or require secrets.
+
+Request:
+```json
+{
+  "intent": "answer_question",
+  "input": "What is Noema?",
+  "session_id": "session-123",
+  "request_id": "request-123",
+  "available_models": ["local-model"],
+  "available_tools": ["search"],
+  "context": {
+    "privacy_level": "local"
+  },
+  "metadata": {
+    "caller": "noesisnoema"
+  }
+}
+```
+
+Minimal curl:
+```bash
+curl -s http://127.0.0.1:8000/v1/route \
+  -H 'Content-Type: application/json' \
+  -d '{"intent":"answer_question","input":"What is Noema?"}'
+```
+
+Response:
+```json
+{
+  "route": "local_echo",
+  "reason": "Route Contract v0 stub selected local_echo for typed planning only; no route was executed and no external model or tool was called.",
+  "confidence": 0.5,
+  "requires_approval": false,
+  "approval_reason": null,
+  "audit_id": "uuid",
+  "trace_id": "uuid",
+  "request_id": "uuid",
+  "status": "planned"
+}
+```
 
 **Error Codes**:
 - `E-EXEC-001` — UnsupportedTask
@@ -243,4 +291,3 @@ This implementation passes all Phase 2A compliance gates:
 - ✅ Gate 2: Observability Compliance (structured logging, trace_id, events)
 - ✅ Gate 3: Error Doctrine Compliance (error codes, structured format)
 - ✅ Gate 4: Schema Compliance (required fields, strict validation)
-

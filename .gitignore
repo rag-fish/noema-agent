@@ -5,6 +5,7 @@ __pycache__/
 
 # Virtual Environment
 venv/
+.venv/
 env/
 ENV/
 
@@ -30,4 +31,3 @@ build/
 # Server logs
 server.log
 *.log
-

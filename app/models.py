@@ -7,7 +7,7 @@ ErrorDetail: structured error information
 """
 
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -22,6 +22,11 @@ class ExecutionStatus(str, Enum):
     """Execution status values."""
     SUCCESS = "success"
     ERROR = "error"
+
+
+class RouteStatus(str, Enum):
+    """Route planning status values."""
+    PLANNED = "planned"
 
 
 class ErrorCode(str, Enum):
@@ -123,3 +128,42 @@ class InvocationResponse(BaseModel):
     timestamp: str = Field(..., description="Response generation time (ISO-8601)")
     execution_time_ms: int = Field(..., description="Execution duration in milliseconds")
     evidence: list[EvidenceAttachment] = Field(default_factory=list, description="Evidence attachments for the result")
+
+
+class RouteRequest(BaseModel):
+    """
+    Request payload for Route Contract v0 planning.
+
+    This schema is intentionally small and forward-compatible. The endpoint
+    returns a typed route decision but does not execute the selected route.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    intent: str = Field(..., description="Caller intent for route planning")
+    input: str | dict[str, Any] = Field(..., description="Input text or structured object to route")
+    session_id: Optional[str] = Field(None, description="Optional session identifier")
+    request_id: Optional[str] = Field(None, description="Optional caller request identifier")
+    available_models: Optional[list[str]] = Field(None, description="Optional model candidates")
+    available_tools: Optional[list[str]] = Field(None, description="Optional tool candidates")
+    context: Optional[dict[str, Any]] = Field(None, description="Optional routing context")
+    metadata: Optional[dict[str, Any]] = Field(None, description="Optional caller metadata")
+
+
+class RouteResponse(BaseModel):
+    """
+    Response payload for Route Contract v0 planning.
+
+    The response is governance metadata for a planned route only. No model,
+    tool, or autonomous action is executed by this contract stub.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    route: str = Field(..., description="Selected route identifier")
+    reason: str = Field(..., description="Human-readable route decision reason")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Decision confidence from 0.0 to 1.0")
+    requires_approval: bool = Field(..., description="Whether approval is required before execution")
+    approval_reason: Optional[str] = Field(None, description="Reason approval is required, if any")
+    audit_id: str = Field(..., description="Audit identifier for this route decision")
+    trace_id: str = Field(..., description="Trace identifier for observability")
+    request_id: str = Field(..., description="Caller request identifier or generated UUID")
+    status: RouteStatus = Field(..., description="Route status; planned means not executed")
